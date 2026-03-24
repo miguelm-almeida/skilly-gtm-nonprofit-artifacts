@@ -1,0 +1,6 @@
+node_modules/
+dist/
+output/*.html
+output/*.json
+.next/
+next-env.d.ts
