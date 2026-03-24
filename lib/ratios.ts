@@ -11,34 +11,14 @@ function safeDiv(numerator: number | null, denominator: number | null): number |
   return numerator / denominator;
 }
 
-function programExpenses(f: Filing): number | null {
-  const direct = num(f["totprgmservexp"]);
-  if (direct !== null) return direct;
-  const totalExp = num(f.totfuncexpns);
-  const admin = num(f["totmulandgenexp"]);
-  const fundraising = num(f["totfundfees"]) ?? num(f.profndraising);
-  if (totalExp !== null && admin !== null && fundraising !== null) {
-    return totalExp - admin - fundraising;
-  }
-  return null;
-}
-
-function adminExpenses(f: Filing): number | null {
-  return num(f["totmulandgenexp"]);
-}
-
-function fundraisingExpenses(f: Filing): number | null {
-  return num(f["totfundfees"]) ?? num(f.profndraising);
-}
-
 export function computeRatios(filing: Filing): FilingRatios {
   const totalExp = num(filing.totfuncexpns);
   const contributions = num(filing.totcntrbgfts);
   const programRev = num(filing.totprgmrevnue);
   const totalRev = num(filing.totrevenue);
-  const progExp = programExpenses(filing);
-  const adminExp = adminExpenses(filing);
-  const fundExp = fundraisingExpenses(filing);
+  const totalAssets = num(filing.totassetsend);
+  const totalLiab = num(filing.totliabend);
+  const officerComp = num(filing.compnsatncurrofcr);
 
   let revenueConcentration: number | null = null;
   if (totalRev !== null && totalRev > 0) {
@@ -49,10 +29,11 @@ export function computeRatios(filing: Filing): FilingRatios {
 
   return {
     taxYear: filing.tax_prd_yr,
-    programExpenseRatio: safeDiv(progExp, totalExp),
-    administrativeRatio: safeDiv(adminExp, totalExp),
-    fundraisingRatio: safeDiv(fundExp, totalExp),
-    fundraisingEfficiency: safeDiv(contributions, fundExp),
+    programExpenseRatio: null,
+    administrativeRatio: null,
+    liabilitiesToAssets: safeDiv(totalLiab, totalAssets),
+    contributionPct: safeDiv(contributions, totalRev),
+    officerCompPct: safeDiv(officerComp, totalExp),
     revenueConcentration,
   };
 }
@@ -86,6 +67,8 @@ export function buildOrgBenchmark(detail: OrgDetail): OrgBenchmark {
     filingCount: filings.length,
     trends: filings.map(computeTrend),
     ratios: filings.map(computeRatios),
+    charityNavigator: null,
+    distanceMiles: null,
   };
 }
 
@@ -111,5 +94,6 @@ export function buildCategoryBenchmark(
     medianRevenue: median(revenues),
     medianAssets: median(assets),
     orgs,
+    locationFilter: null,
   };
 }

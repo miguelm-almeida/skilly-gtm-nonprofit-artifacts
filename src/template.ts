@@ -1,4 +1,4 @@
-import type { CategoryBenchmark, OrgBenchmark, FilingRatios } from "./types.js";
+import type { CategoryBenchmark, OrgBenchmark, FilingRatios } from "../lib/types.js";
 
 const SKILLY_LOGO_SVG = `<svg width="100" height="32" viewBox="0 0 339 107" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M35.0724 54.5296C35.0724 58.3889 31.7707 55.2344 27.7277 55.2344C23.6511 55.2344 20.3494 58.3218 20.3494 54.4289C20.3494 50.5696 23.6848 47.4486 27.7614 47.4822C31.838 47.4822 35.1061 50.6703 35.0724 54.5296Z" fill="#4F46E5"/>
@@ -90,16 +90,16 @@ function renderOrgDetail(org: OrgBenchmark, index: number): string {
       <h4>Latest Financial Ratios (${latestRatios.taxYear})</h4>
       <div class="ratio-grid">
         <div class="ratio-card">
-          <div class="ratio-value ${ratioClass(latestRatios.programExpenseRatio, { good: 0.75, warn: 0.65 })}">${fmtPct(latestRatios.programExpenseRatio)}</div>
-          <div class="ratio-label">Program Expense Ratio</div>
+          <div class="ratio-value ${ratioClass(latestRatios.liabilitiesToAssets, { good: 0.5, warn: 0.8, higher: false })}">${fmtPct(latestRatios.liabilitiesToAssets)}</div>
+          <div class="ratio-label">Debt Ratio</div>
         </div>
         <div class="ratio-card">
-          <div class="ratio-value ${ratioClass(latestRatios.administrativeRatio, { good: 0.15, warn: 0.25, higher: false })}">${fmtPct(latestRatios.administrativeRatio)}</div>
-          <div class="ratio-label">Administrative Ratio</div>
+          <div class="ratio-value ${ratioClass(latestRatios.contributionPct, { good: 0.5, warn: 0.2 })}">${fmtPct(latestRatios.contributionPct)}</div>
+          <div class="ratio-label">Contribution %</div>
         </div>
         <div class="ratio-card">
-          <div class="ratio-value ${ratioClass(latestRatios.fundraisingEfficiency, { good: 5, warn: 2 })}">${fmtRatio(latestRatios.fundraisingEfficiency)}</div>
-          <div class="ratio-label">Fundraising Efficiency</div>
+          <div class="ratio-value ${ratioClass(latestRatios.officerCompPct, { good: 0.05, warn: 0.15, higher: false })}">${fmtPct(latestRatios.officerCompPct)}</div>
+          <div class="ratio-label">Officer Compensation</div>
         </div>
         <div class="ratio-card">
           <div class="ratio-value ${ratioClass(latestRatios.revenueConcentration, { good: 0.5, warn: 0.8, higher: false })}">${fmtPct(latestRatios.revenueConcentration)}</div>
@@ -125,13 +125,13 @@ function bestWorst(orgs: OrgBenchmark[], accessor: (r: FilingRatios) => number |
   return `
 <div class="highlight-row">
   <span class="highlight-label">${esc(label)}</span>
-  <span class="highlight-best">Best: ${esc(best.name)} (${label.includes("Efficiency") ? fmtRatio(best.value) : fmtPct(best.value)})</span>
-  <span class="highlight-worst">Weakest: ${esc(worst.name)} (${label.includes("Efficiency") ? fmtRatio(worst.value) : fmtPct(worst.value)})</span>
+  <span class="highlight-best">Best: ${esc(best.name)} (${fmtPct(best.value)})</span>
+  <span class="highlight-worst">Weakest: ${esc(worst.name)} (${fmtPct(worst.value)})</span>
 </div>`;
 }
 
 export function generateHTML(benchmark: CategoryBenchmark): string {
-  const date = benchmark.generatedAt.toLocaleDateString("en-US", {
+  const date = new Date(benchmark.generatedAt).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -148,8 +148,8 @@ export function generateHTML(benchmark: CategoryBenchmark): string {
       <td class="num-cell">${fmtDollars(org.latestRevenue)}</td>
       <td class="num-cell">${fmtDollars(org.latestExpenses)}</td>
       <td class="num-cell">${fmtDollars(org.latestAssets)}</td>
-      <td class="num-cell ${r ? ratioClass(r.programExpenseRatio, { good: 0.75, warn: 0.65 }) : ""}">${r ? fmtPct(r.programExpenseRatio) : "N/A"}</td>
-      <td class="num-cell ${r ? ratioClass(r.administrativeRatio, { good: 0.15, warn: 0.25, higher: false }) : ""}">${r ? fmtPct(r.administrativeRatio) : "N/A"}</td>
+      <td class="num-cell ${r ? ratioClass(r.liabilitiesToAssets, { good: 0.5, warn: 0.8, higher: false }) : ""}">${r ? fmtPct(r.liabilitiesToAssets) : "N/A"}</td>
+      <td class="num-cell">${r ? fmtPct(r.contributionPct) : "N/A"}</td>
     </tr>`;
     })
     .join("\n");
@@ -157,9 +157,9 @@ export function generateHTML(benchmark: CategoryBenchmark): string {
   const orgDetails = benchmark.orgs.map((org, i) => renderOrgDetail(org, i)).join("\n");
 
   const highlights = [
-    bestWorst(benchmark.orgs, (r) => r?.programExpenseRatio, "Program Expense Ratio", true),
-    bestWorst(benchmark.orgs, (r) => r?.fundraisingEfficiency, "Fundraising Efficiency", true),
-    bestWorst(benchmark.orgs, (r) => r?.administrativeRatio, "Administrative Ratio", false),
+    bestWorst(benchmark.orgs, (r) => r?.liabilitiesToAssets, "Debt Ratio", false),
+    bestWorst(benchmark.orgs, (r) => r?.contributionPct, "Contribution %", true),
+    bestWorst(benchmark.orgs, (r) => r?.officerCompPct, "Officer Compensation", false),
   ]
     .filter(Boolean)
     .join("\n");
@@ -221,8 +221,8 @@ export function generateHTML(benchmark: CategoryBenchmark): string {
         <th>Revenue</th>
         <th>Expenses</th>
         <th>Assets</th>
-        <th>Program Exp %</th>
-        <th>Admin %</th>
+        <th>Debt Ratio</th>
+        <th>Contrib. %</th>
       </tr>
     </thead>
     <tbody>

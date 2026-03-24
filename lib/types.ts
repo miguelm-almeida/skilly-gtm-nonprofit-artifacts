@@ -5,6 +5,14 @@ export interface CategoryConfig {
   nteeCodePrefix?: string;
 }
 
+export interface LocationFilter {
+  label: string;
+  latitude: number;
+  longitude: number;
+  radiusMiles: number;
+  stateCode: string | null;
+}
+
 export const CATEGORIES: CategoryConfig[] = [
   { slug: "mutual-membership-benefit", label: "Mutual/Membership Benefit (VEBA)", nteeId: 9 },
   { slug: "education", label: "Education", nteeId: 2 },
@@ -77,8 +85,9 @@ export interface FilingRatios {
   taxYear: number;
   programExpenseRatio: number | null;
   administrativeRatio: number | null;
-  fundraisingRatio: number | null;
-  fundraisingEfficiency: number | null;
+  liabilitiesToAssets: number | null;
+  contributionPct: number | null;
+  officerCompPct: number | null;
   revenueConcentration: number | null;
 }
 
@@ -101,6 +110,18 @@ export interface OrgBenchmark {
   filingCount: number;
   trends: FilingTrend[];
   ratios: FilingRatios[];
+  charityNavigator: CharityNavigatorRating | null;
+  distanceMiles: number | null;
+}
+
+export interface CharityNavigatorRating {
+  score: number | null;
+  stars: number | null;
+  programExpensesRatio: number | null;
+  administrationExpensesRatio: number | null;
+  liabilitiesToAssetsRatio: number | null;
+  charityNavigatorUrl: string | null;
+  highestLevelAlert: string | null;
 }
 
 export interface CategoryBenchmark {
@@ -110,12 +131,19 @@ export interface CategoryBenchmark {
   medianRevenue: number;
   medianAssets: number;
   orgs: OrgBenchmark[];
+  locationFilter: LocationFilter | null;
 }
 
 export interface SSEProgress {
-  phase: "search" | "filter" | "fetch" | "compute" | "complete" | "error";
+  phase: "search" | "filter" | "fetch" | "enrich" | "compute" | "complete" | "error";
   current?: number;
   total?: number;
   message?: string;
   data?: CategoryBenchmark;
+}
+
+export interface FetchCategoryResult {
+  details: OrgDetail[];
+  locationFilter: LocationFilter | null;
+  distancesByEin: Record<number, number>;
 }

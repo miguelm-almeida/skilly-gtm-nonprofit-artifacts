@@ -4,3 +4,5 @@ output/*.html
 output/*.json
 .next/
 next-env.d.ts
+.env.local
+.env*.local

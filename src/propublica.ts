@@ -1,10 +1,22 @@
 import type { SearchResult, SearchOrg, OrgDetail, CategoryConfig } from "./types.js";
 
 const BASE_URL = "https://projects.propublica.org/nonprofits/api/v2";
-const REQUEST_DELAY_MS = 250;
+const CONCURRENCY = 6;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function pLimit(concurrency: number) {
+  let active = 0;
+  const queue: (() => void)[] = [];
+  return <T>(fn: () => Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const run = () => {
+        active++;
+        fn().then(resolve, reject).finally(() => {
+          active--;
+          if (queue.length > 0) queue.shift()!();
+        });
+      };
+      active < concurrency ? run() : queue.push(run);
+    });
 }
 
 async function fetchJSON<T>(url: string): Promise<T> {
@@ -20,20 +32,27 @@ export async function searchByCategory(
   state?: string,
   maxPages = 4,
 ): Promise<SearchOrg[]> {
-  const allOrgs: SearchOrg[] = [];
+  const firstParams = new URLSearchParams();
+  firstParams.set("ntee[id]", String(nteeId));
+  if (state) firstParams.set("state[id]", state);
+  firstParams.set("page", "0");
 
-  for (let page = 0; page < maxPages; page++) {
-    const params = new URLSearchParams();
-    params.set("ntee[id]", String(nteeId));
-    if (state) params.set("state[id]", state);
-    params.set("page", String(page));
+  const first = await fetchJSON<SearchResult>(`${BASE_URL}/search.json?${firstParams.toString()}`);
+  const allOrgs: SearchOrg[] = [...first.organizations];
+  const totalPages = Math.min(maxPages, first.num_pages);
 
-    const url = `${BASE_URL}/search.json?${params.toString()}`;
-    const result = await fetchJSON<SearchResult>(url);
-    allOrgs.push(...result.organizations);
-
-    if (page >= result.num_pages - 1) break;
-    await sleep(REQUEST_DELAY_MS);
+  if (totalPages > 1) {
+    const limit = pLimit(CONCURRENCY);
+    const remaining = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, i) => {
+        const p = new URLSearchParams();
+        p.set("ntee[id]", String(nteeId));
+        if (state) p.set("state[id]", state);
+        p.set("page", String(i + 1));
+        return limit(() => fetchJSON<SearchResult>(`${BASE_URL}/search.json?${p.toString()}`));
+      }),
+    );
+    for (const r of remaining) allOrgs.push(...r.organizations);
   }
 
   return allOrgs;
@@ -49,21 +68,30 @@ export async function fetchOrgsWithProgress(
   label: string,
   onProgress?: (current: number, total: number) => void,
 ): Promise<OrgDetail[]> {
-  const results: OrgDetail[] = [];
+  let completed = 0;
+  const limit = pLimit(CONCURRENCY);
 
-  for (let i = 0; i < eins.length; i++) {
-    onProgress?.(i + 1, eins.length);
-    try {
-      const detail = await fetchOrg(eins[i]);
-      results.push(detail);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`  [warn] Failed to fetch EIN ${eins[i]}: ${msg}\n`);
+  const settled = await Promise.allSettled(
+    eins.map((ein) =>
+      limit(async () => {
+        const detail = await fetchOrg(ein);
+        completed++;
+        onProgress?.(completed, eins.length);
+        return detail;
+      }),
+    ),
+  );
+
+  for (const r of settled) {
+    if (r.status === "rejected") {
+      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      process.stderr.write(`  [warn] Failed to fetch an org: ${msg}\n`);
     }
-    if (i < eins.length - 1) await sleep(REQUEST_DELAY_MS);
   }
 
-  return results;
+  return settled
+    .filter((r): r is PromiseFulfilledResult<OrgDetail> => r.status === "fulfilled")
+    .map((r) => r.value);
 }
 
 export async function fetchCategoryOrgs(
